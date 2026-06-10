@@ -38,6 +38,20 @@ interface PageData {
 
 export default defineComponent({
   name: 'App',
+  components: {
+    ArrowRight,
+    Trash2,
+    CheckCircle2,
+    Circle,
+    Wallet,
+    Calculator,
+    RefreshCcw,
+    Plus,
+    ChevronUp,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+  },
   data() {
     return {
       accountDefs: loadFromStorage<AccountDef[]>('fin_account_defs', [
