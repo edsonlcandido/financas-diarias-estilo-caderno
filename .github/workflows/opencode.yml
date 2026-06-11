@@ -23,6 +23,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+        # NOVO PASSO: Configura a identidade do Git para o robô conseguir commitar
+      - name: Configure Git User
+        run: |
+          git config --global user.email "opencode-bot@://github.com"
+          git config --global user.name "opencode[bot]"
+
       - name: Run OpenCode
         uses: anomalyco/opencode/github@latest
         env:
