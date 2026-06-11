@@ -11,8 +11,14 @@ jobs:
     if: |
       contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode')
     runs-on: ubuntu-latest
+
+     # Adicionando explicitamente as permissões necessárias para o GITHUB_TOKEN
     permissions:
+      contents: write
+      pull-requests: write
+      issues: write
       id-token: write
+      
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
