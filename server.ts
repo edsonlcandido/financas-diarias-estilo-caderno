@@ -12,6 +12,10 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 const distPath = path.join(__dirname, 'dist');
 
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 app.use(
   express.static(distPath, {
     maxAge: '1y',
@@ -28,6 +32,17 @@ app.get(/.*/, (_req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-app.listen(PORT, HOST, () => {
-  console.log(`Server listening on http://${HOST}:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  process.stdout.write(`Server listening on http://${HOST}:${PORT}\n`);
 });
+
+const shutdown = (signal: string) => {
+  process.stdout.write(`Received ${signal}, shutting down...\n`);
+  server.close(() => {
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 10000).unref();
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
