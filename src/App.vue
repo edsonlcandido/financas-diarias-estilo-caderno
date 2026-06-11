@@ -15,6 +15,10 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Pin,
+  PinOff,
+  X,
+  Menu,
 } from 'lucide-vue-next';
 import { loadFromStorage, saveToStorage } from './composables/useLocalStorage';
 
@@ -29,6 +33,13 @@ interface Entry {
   value: number;
   isPaid: boolean;
   createdAt: number;
+  fixedTemplateId?: string;
+}
+
+interface FixedTemplate {
+  id: string;
+  description: string;
+  value: number;
 }
 
 interface PageData {
@@ -51,6 +62,10 @@ export default defineComponent({
     ChevronDown,
     ChevronLeft,
     ChevronRight,
+    Pin,
+    PinOff,
+    X,
+    Menu,
   },
   data() {
     return {
@@ -60,11 +75,14 @@ export default defineComponent({
         { id: '3', name: 'Itaú' },
       ]),
       allPages: loadFromStorage<Record<string, PageData>>('fin_month_pages', {}),
+      fixedTemplates: loadFromStorage<FixedTemplate[]>('fin_fixed_templates', []),
       currentDate: startOfMonth(new Date()),
       newEntryDesc: '',
       newEntryValue: '',
+      pinCurrent: false,
       balanceInputs: {} as Record<string, string>,
       isClient: true,
+      isDrawerOpen: false,
     };
   },
   computed: {
@@ -94,6 +112,14 @@ export default defineComponent({
     projectedSaldo(): number {
       return this.currentAssets + this.pendingMovements;
     },
+    pendingFixedCount(): number {
+      const appliedIds = new Set(
+        this.entries
+          .map((e) => e.fixedTemplateId)
+          .filter((id): id is string => Boolean(id))
+      );
+      return this.fixedTemplates.filter((t) => !appliedIds.has(t.id)).length;
+    },
   },
   watch: {
     accountDefs: {
@@ -108,12 +134,24 @@ export default defineComponent({
       },
       deep: true,
     },
+    fixedTemplates: {
+      handler(val: FixedTemplate[]) {
+        saveToStorage('fin_fixed_templates', val);
+      },
+      deep: true,
+    },
     monthKey: {
       handler() {
         this.syncBalanceInputs();
       },
       immediate: true,
     },
+  },
+  mounted() {
+    window.addEventListener('keydown', this.handleKeydown);
+  },
+  beforeUnmount() {
+    window.removeEventListener('keydown', this.handleKeydown);
   },
   methods: {
     updatePage(newData: Partial<PageData>) {
@@ -186,16 +224,85 @@ export default defineComponent({
       if (!this.newEntryDesc || !this.newEntryValue) return;
       const val = parseFloat(this.newEntryValue.replace(',', '.'));
       if (isNaN(val)) return;
+
+      const shouldPin = this.pinCurrent;
+      this.pinCurrent = false;
+
+      let fixedTemplateId: string | undefined;
+      let templates = this.fixedTemplates;
+      if (shouldPin) {
+        const existing = this.fixedTemplates.find(
+          (t) => t.description === this.newEntryDesc && t.value === val
+        );
+        if (existing) {
+          fixedTemplateId = existing.id;
+        } else {
+          const newTemplate: FixedTemplate = {
+            id: Date.now().toString(),
+            description: this.newEntryDesc,
+            value: val,
+          };
+          templates = [...this.fixedTemplates, newTemplate];
+          fixedTemplateId = newTemplate.id;
+        }
+      }
+
       const newEntry: Entry = {
-        id: Date.now().toString(),
+        id: (Date.now() + 1).toString(),
         description: this.newEntryDesc,
         value: val,
         isPaid: false,
         createdAt: Date.now(),
+        fixedTemplateId,
       };
+      this.fixedTemplates = templates;
       this.updatePage({ entries: [newEntry, ...this.entries] });
       this.newEntryDesc = '';
       this.newEntryValue = '';
+    },
+    togglePinCurrent() {
+      this.pinCurrent = !this.pinCurrent;
+    },
+    applyFixedTemplates() {
+      if (this.fixedTemplates.length === 0) {
+        alert('Nenhum lançamento fixo cadastrado.');
+        return;
+      }
+      const appliedIds = new Set(
+        this.entries
+          .map((e) => e.fixedTemplateId)
+          .filter((id): id is string => Boolean(id))
+      );
+      const toApply = this.fixedTemplates.filter((t) => !appliedIds.has(t.id));
+      if (toApply.length === 0) {
+        alert('Todos os lançamentos fixos já estão aplicados neste mês.');
+        return;
+      }
+      if (!confirm(`Aplicar ${toApply.length} lançamento(s) fixo(s) a este mês?`)) {
+        return;
+      }
+      const baseTime = Date.now();
+      const newEntries: Entry[] = toApply.map((t, idx) => ({
+        id: `${baseTime + idx}`,
+        description: t.description,
+        value: t.value,
+        isPaid: false,
+        createdAt: baseTime + idx,
+        fixedTemplateId: t.id,
+      }));
+      this.updatePage({ entries: [...newEntries, ...this.entries] });
+    },
+    removeFixedTemplate(id: string) {
+      if (!confirm('Remover este modelo de lançamento fixo?')) return;
+      this.fixedTemplates = this.fixedTemplates.filter((t) => t.id !== id);
+    },
+    unfixEntry(id: string) {
+      const newEntries = this.entries.map((e) => {
+        if (e.id !== id) return e;
+        const { fixedTemplateId, ...rest } = e;
+        return rest as Entry;
+      });
+      this.updatePage({ entries: newEntries });
     },
     togglePaid(id: string) {
       const newEntries = this.entries.map((e) =>
@@ -216,6 +323,20 @@ export default defineComponent({
     resetMonth() {
       if (confirm('Limpar registros deste mês?')) {
         this.updatePage({ entries: [] });
+      }
+    },
+    openDrawer() {
+      this.isDrawerOpen = true;
+    },
+    closeDrawer() {
+      this.isDrawerOpen = false;
+    },
+    toggleDrawer() {
+      this.isDrawerOpen = !this.isDrawerOpen;
+    },
+    handleKeydown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && this.isDrawerOpen) {
+        this.closeDrawer();
       }
     },
     formatCurrency(val: number): string {
@@ -256,11 +377,12 @@ export default defineComponent({
         </div>
       </div>
       <button
-        @click="resetMonth"
-        class="p-2 text-gray-300 hover:text-red-400 transition-colors"
-        title="Resetar Mês"
+        @click="openDrawer"
+        class="p-2 text-gray-300 hover:text-ink transition-colors"
+        title="Menu"
+        aria-label="Abrir menu"
       >
-        <RefreshCcw :size="18" />
+        <Menu :size="20" />
       </button>
     </header>
 
@@ -335,11 +457,30 @@ export default defineComponent({
 
     <!-- Movements Section -->
     <section class="mb-12 md:mb-20">
-      <h2 class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-gray-500 mb-4 md:mb-6">
-        <Calculator :size="14" /> Entradas e Saídas
-      </h2>
+      <div class="flex items-center justify-between mb-4 md:mb-6">
+        <h2 class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-gray-500">
+          <Calculator :size="14" /> Entradas e Saídas
+        </h2>
+        <button
+          v-if="fixedTemplates.length > 0"
+          @click="applyFixedTemplates"
+          :disabled="pendingFixedCount === 0"
+          class="flex items-center gap-1.5 text-xs transition-colors border-b border-transparent"
+          :class="pendingFixedCount === 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-ink hover:border-ink'"
+          title="Aplicar lançamentos fixos a este mês"
+        >
+          <Pin :size="12" />
+          <span>Aplicar Fixos</span>
+          <span
+            v-if="pendingFixedCount > 0"
+            class="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-ink text-white leading-none"
+          >
+            {{ pendingFixedCount }}
+          </span>
+        </button>
+      </div>
 
-      <form @submit.prevent="addEntry" class="mb-6 flex flex-col sm:flex-row gap-2">
+      <form @submit.prevent="addEntry" class="mb-4 flex flex-col sm:flex-row gap-2">
         <input
           v-model="newEntryDesc"
           type="text"
@@ -355,6 +496,16 @@ export default defineComponent({
             placeholder="-1.200,00"
             class="flex-1 sm:w-28 bg-white border border-black/5 rounded-lg px-4 py-2 text-sm font-mono text-right focus:outline-none focus:ring-1 focus:ring-black/10 transition-all shadow-sm min-w-0"
           />
+          <button
+            type="button"
+            @click="togglePinCurrent"
+            class="rounded-lg px-3 py-2 transition-all active:scale-95 duration-200 shrink-0 border shadow-sm"
+            :class="pinCurrent ? 'bg-ink text-white border-ink' : 'bg-white text-gray-400 border-black/5 hover:text-ink'"
+            :title="pinCurrent ? 'Este lançamento será salvo como fixo' : 'Fixar como lançamento recorrente'"
+            :aria-pressed="pinCurrent"
+          >
+            <Pin :size="16" />
+          </button>
           <button
             type="submit"
             class="bg-ink text-white rounded-lg px-4 py-2 hover:opacity-90 transition-opacity active:scale-95 duration-200 shadow-lg shadow-black/10 shrink-0"
@@ -386,10 +537,17 @@ export default defineComponent({
               </button>
 
               <span
-                class="flex-1 text-sm transition-all truncate pr-2"
+                class="flex-1 text-sm transition-all truncate pr-2 flex items-center gap-1.5 min-w-0"
                 :class="entry.isPaid ? 'line-through text-gray-500' : 'font-medium'"
               >
-                {{ entry.description }}
+                <PinOff
+                  v-if="entry.fixedTemplateId"
+                  :size="10"
+                  class="text-gray-300 hover:text-red-400 cursor-pointer shrink-0"
+                  @click.stop="unfixEntry(entry.id)"
+                  title="Desafixar deste modelo"
+                />
+                <span class="truncate">{{ entry.description }}</span>
               </span>
 
               <div class="flex items-center gap-3 shrink-0">
@@ -461,5 +619,120 @@ export default defineComponent({
     <div class="fixed bottom-24 md:bottom-28 left-1/2 -translate-x-1/2 text-[9px] md:text-[10px] text-gray-400 uppercase tracking-widest font-medium text-center w-full px-4 animate-pulse pointer-events-none">
       Toque no círculo para confirmar o pagamento
     </div>
+
+    <!-- Side Drawer (right to left) -->
+    <Transition name="drawer-fade">
+      <div
+        v-if="isDrawerOpen"
+        @click="closeDrawer"
+        class="fixed inset-0 bg-black/30 backdrop-blur-sm z-[60]"
+        aria-hidden="true"
+      ></div>
+    </Transition>
+    <Transition name="drawer-slide">
+      <aside
+        v-if="isDrawerOpen"
+        class="fixed top-0 right-0 bottom-0 w-[88vw] max-w-sm bg-paper z-[70] shadow-2xl flex flex-col"
+        role="dialog"
+        aria-label="Menu lateral"
+        @click.stop
+      >
+        <header class="flex items-center justify-between px-5 py-4 border-b border-black/5">
+          <h2 class="text-sm font-semibold uppercase tracking-widest text-gray-500">Menu</h2>
+          <button
+            @click="closeDrawer"
+            class="p-2 -mr-2 text-gray-400 hover:text-ink transition-colors"
+            title="Fechar"
+            aria-label="Fechar menu"
+          >
+            <X :size="20" />
+          </button>
+        </header>
+
+        <div class="flex-1 overflow-y-auto px-5 py-5 space-y-8">
+          <!-- Fixed Templates Section -->
+          <section>
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-gray-500">
+                <Pin :size="12" /> Lançamentos Fixos
+              </h3>
+              <span
+                v-if="fixedTemplates.length > 0"
+                class="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-ink text-white leading-none"
+              >
+                {{ fixedTemplates.length }}
+              </span>
+            </div>
+
+            <button
+              v-if="fixedTemplates.length > 0"
+              @click="applyFixedTemplates"
+              :disabled="pendingFixedCount === 0"
+              class="w-full mb-4 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border text-sm transition-all"
+              :class="pendingFixedCount === 0
+                ? 'border-black/5 text-gray-300 cursor-not-allowed bg-white/40'
+                : 'border-ink bg-ink text-white hover:opacity-90 active:scale-[0.98]'"
+            >
+              <Pin :size="14" />
+              <span>Aplicar ao mês</span>
+              <span
+                v-if="pendingFixedCount > 0"
+                class="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-white text-ink leading-none"
+              >
+                {{ pendingFixedCount }}
+              </span>
+            </button>
+
+            <div v-if="fixedTemplates.length === 0" class="text-xs text-gray-400 italic">
+              Nenhum modelo. Use o botão 📌 no formulário de novo lançamento para fixar um item.
+            </div>
+
+            <ul v-else class="space-y-2">
+              <li
+                v-for="tpl in fixedTemplates"
+                :key="tpl.id"
+                class="group flex items-center gap-3 p-3 rounded-lg border border-black/5 bg-white/70 shadow-sm"
+              >
+                <Pin :size="12" class="text-gray-400 shrink-0" />
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm truncate">{{ tpl.description }}</div>
+                  <div
+                    class="font-mono text-xs"
+                    :class="tpl.value >= 0 ? 'text-emerald-600' : 'text-red-500'"
+                  >
+                    {{ formatCurrency(tpl.value) }}
+                  </div>
+                </div>
+                <button
+                  @click="removeFixedTemplate(tpl.id)"
+                  class="p-2 text-gray-300 hover:text-red-500 transition-colors"
+                  title="Remover modelo"
+                  aria-label="Remover modelo"
+                >
+                  <Trash2 :size="14" />
+                </button>
+              </li>
+            </ul>
+          </section>
+
+          <!-- Danger Zone -->
+          <section>
+            <h3 class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
+              <RefreshCcw :size="12" /> Zona de perigo
+            </h3>
+            <button
+              @click="resetMonth"
+              class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-red-200 text-red-600 text-sm hover:bg-red-50 active:scale-[0.98] transition-all"
+            >
+              <RefreshCcw :size="14" />
+              <span>Resetar mês</span>
+            </button>
+            <p class="mt-2 text-[10px] text-gray-400 leading-relaxed">
+              Remove todos os lançamentos do mês aberto. Os modelos fixos são preservados.
+            </p>
+          </section>
+        </div>
+      </aside>
+    </Transition>
   </div>
 </template>

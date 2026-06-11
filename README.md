@@ -38,6 +38,17 @@ servidor, sem nuvem.
 - Botão de **resetar mês** com confirmação para limpar todos os lançamentos
   do mês corrente.
 
+### 📌 Lançamentos fixos (recorrentes)
+- Botão **📌** no formulário de novo lançamento transforma o item em um
+  **modelo fixo** salvo no `localStorage` (namespace `fin_fixed_templates`).
+- A **lista de modelos** e a ação de **aplicar** ficam no **menu lateral**
+  (drawer), junto com a opção de remover cada modelo e de resetar o mês.
+- Lançamentos aplicados carregam um pequeno ícone **📌** que, ao ser clicado,
+  **desafixa** a entrada do modelo (sem excluir o lançamento).
+- Duplicação é evitada via `fixedTemplateId` na `Entry`, não por
+  descrição/valor — editar uma instância aplicada não causa duplicação na
+  próxima aplicação.
+
 ### 🧮 Cálculos automáticos
 - **Saldo Atual Bancário** = soma dos saldos de todas as contas do mês.
 - **Pendente** = soma dos valores dos lançamentos ainda não pagos.
@@ -46,9 +57,10 @@ servidor, sem nuvem.
 - Todos os valores formatados em **BRL (R$)** via `Intl.NumberFormat`.
 
 ### 💾 Persistência local
-- Composable `useLocalStorage` para dois namespaces:
+- Composable `useLocalStorage` para três namespaces:
   - `fin_account_defs` → lista de contas cadastradas.
   - `fin_month_pages` → dicionário `{ "yyyy-MM": { entries, balances } }`.
+  - `fin_fixed_templates` → lista de modelos de lançamentos recorrentes.
 - Recuperação automática dos dados ao reabrir o app em outra sessão/dispositivo
   com o mesmo navegador.
 
@@ -58,9 +70,16 @@ servidor, sem nuvem.
 - Painel de resumo **fixo** na parte inferior (glassmorphism) com bolinhas
   coloridas indicando o status.
 - Dica flutuante pulsante: *"Toque no círculo para confirmar o pagamento"*.
+- **Menu lateral** deslizante da direita para a esquerda, aberto por um botão
+  no header, com backdrop desfocado. Reúne:
+  - Lista de **Lançamentos Fixos** com botão de aplicar ao mês e remover.
+  - **Resetar mês** (com confirmação) em uma seção de "zona de perigo".
+  - Fecha por clique no backdrop, no `X` ou pela tecla `Esc`.
 - Animações sutis com `<TransitionGroup>` e `<Transition>` do próprio Vue:
   - Entrada/saída dos lançamentos (`name="entry"` + `tag="div"`).
   - Surgimento inicial do painel de resumo (`name="footer" appear`).
+  - Backdrop do drawer (`name="drawer-fade"`) e painel deslizante
+    (`name="drawer-slide"`, easing `cubic-bezier(0.32, 0.72, 0, 1)`).
 - Suporte a `selection:bg-red-100` para uma seleção de texto coerente com o
   tema.
 
