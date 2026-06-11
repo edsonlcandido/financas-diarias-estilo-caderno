@@ -23,3 +23,34 @@
 .notebook-margin {
   @apply border-l-2 border-red-200/40 ml-4 md:ml-8 pl-4 md:pl-6;
 }
+
+/* TransitionGroup: entry list items */
+.entry-enter-from,
+.entry-leave-to {
+  opacity: 0;
+  transform: translateX(-5px) scale(0.98);
+}
+.entry-enter-active {
+  transition: opacity 250ms ease, transform 250ms ease;
+}
+.entry-leave-active {
+  transition: opacity 200ms ease, transform 200ms ease;
+  position: absolute;
+  width: 100%;
+}
+.entry-move {
+  transition: transform 300ms ease;
+}
+
+/* Transition: footer (slide up + fade in on appear) */
+.footer-enter-from {
+  opacity: 0;
+  transform: translateY(50px);
+}
+.footer-enter-active {
+  transition: opacity 400ms ease, transform 400ms ease;
+}
+.footer-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+}
