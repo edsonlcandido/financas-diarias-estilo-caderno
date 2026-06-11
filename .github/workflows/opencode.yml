@@ -22,7 +22,10 @@ jobs:
         env:
           # O OpenCode aceita a OPENROUTER_API_KEY nativamente para o provedor correspondente
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Injeta o token nativo do GitHub para autenticar as requisições à API REST
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           # Define o openrouter como provedor seguido do identificador oficial do MiniMax M3
           model: openrouter/minimax/minimax-m3
-
+          # Força a Action a usar o GITHUB_TOKEN fornecido em vez do app padrão
+          use_github_token: "true"
