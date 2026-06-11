@@ -9,23 +9,35 @@ on:
 jobs:
   opencode:
     if: |
-      contains(github.event.comment.body, '/oc') ||
-      contains(github.event.comment.body, '/opencode')
+      contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode')
     runs-on: ubuntu-latest
+
+     # Adicionando explicitamente as permissões necessárias para o GITHUB_TOKEN
     permissions:
-      id-token: write
       contents: write
       pull-requests: write
+      issues: write
+      id-token: write
+      
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-  
+
+        # NOVO PASSO: Configura a identidade do Git para o robô conseguir commitar
+      - name: Configure Git User
+        run: |
+          git config --global user.email "opencode-bot@://github.com"
+          git config --global user.name "opencode[bot]"
+
       - name: Run OpenCode
         uses: anomalyco/opencode/github@latest
         env:
+          # O OpenCode aceita a OPENROUTER_API_KEY nativamente para o provedor correspondente
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Injeta o token nativo do GitHub para autenticar as requisições à API REST
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          # Define o openrouter como provedor seguido do identificador oficial do MiniMax M3
           model: openrouter/minimax/minimax-m3
+          # Força a Action a usar o GITHUB_TOKEN fornecido em vez do app padrão
+          use_github_token: "true"
