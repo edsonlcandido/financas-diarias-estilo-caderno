@@ -10,7 +10,7 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-const distPath = path.join(__dirname, 'dist');
+const distPath = path.join(__dirname, '..', 'dist');
 
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok' });
