@@ -63,6 +63,7 @@ export default defineComponent({
       currentDate: startOfMonth(new Date()),
       newEntryDesc: '',
       newEntryValue: '',
+      balanceInputs: {} as Record<string, string>,
       isClient: true,
     };
   },
@@ -107,6 +108,12 @@ export default defineComponent({
       },
       deep: true,
     },
+    monthKey: {
+      handler() {
+        this.syncBalanceInputs();
+      },
+      immediate: true,
+    },
   },
   methods: {
     updatePage(newData: Partial<PageData>) {
@@ -121,19 +128,47 @@ export default defineComponent({
     addAccount() {
       const name = prompt('Nome da conta/cartão (ex: Itaú, Fatura...):');
       if (name) {
+        const newId = Date.now().toString();
         this.accountDefs = [
           ...this.accountDefs,
-          { id: Date.now().toString(), name },
+          { id: newId, name },
         ];
+        this.balanceInputs[newId] = '';
       }
     },
-    updateAccountBalance(accountId: string, valStr: string) {
-      const val = parseFloat(valStr.replace(',', '.'));
+    syncBalanceInputs() {
+      const next: Record<string, string> = {};
+      for (const acc of this.accountDefs) {
+        const bal = this.currentPage.balances[acc.id];
+        next[acc.id] = bal === undefined || bal === 0 ? '' : String(bal);
+      }
+      this.balanceInputs = next;
+    },
+    updateAccountBalance(accountId: string, val: number) {
       const newBalances = {
         ...this.currentPage.balances,
-        [accountId]: isNaN(val) ? 0 : val,
+        [accountId]: val,
       };
       this.updatePage({ balances: newBalances });
+    },
+    onBalanceInput(accountId: string, valStr: string) {
+      this.balanceInputs[accountId] = valStr;
+
+      const cleaned = valStr.replace(',', '.');
+
+      if (cleaned === '') {
+        this.updateAccountBalance(accountId, 0);
+        return;
+      }
+
+      if (cleaned.endsWith('-') || cleaned.endsWith('.')) {
+        return;
+      }
+
+      const parsed = parseFloat(cleaned);
+      if (!isNaN(parsed)) {
+        this.updateAccountBalance(accountId, parsed);
+      }
     },
     removeAccount(id: string) {
       if (confirm('Remover esta conta de todos os meses?')) {
@@ -271,10 +306,12 @@ export default defineComponent({
           <div class="flex items-center gap-3">
             <input
               type="text"
+              inputmode="decimal"
+              pattern="[0-9,.\-]*"
               class="w-24 text-right bg-transparent font-mono text-sm border-b border-black/5 focus:border-black/20 focus:outline-none transition-all py-1 placeholder:opacity-20"
-              :value="currentPage.balances[acc.id] ?? ''"
+              :value="balanceInputs[acc.id] ?? ''"
               placeholder="0"
-              @input="updateAccountBalance(acc.id, ($event.target as HTMLInputElement).value)"
+              @input="onBalanceInput(acc.id, ($event.target as HTMLInputElement).value)"
             />
             <button
               @click="removeAccount(acc.id)"
@@ -313,6 +350,8 @@ export default defineComponent({
           <input
             v-model="newEntryValue"
             type="text"
+            inputmode="decimal"
+            pattern="[0-9,.\-]*"
             placeholder="-1.200,00"
             class="flex-1 sm:w-28 bg-white border border-black/5 rounded-lg px-4 py-2 text-sm font-mono text-right focus:outline-none focus:ring-1 focus:ring-black/10 transition-all shadow-sm min-w-0"
           />
