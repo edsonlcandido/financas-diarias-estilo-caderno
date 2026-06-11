@@ -83,6 +83,13 @@ export default defineComponent({
       balanceInputs: {} as Record<string, string>,
       isClient: true,
       isDrawerOpen: false,
+      modal: {
+        type: null as null | 'alert' | 'confirm' | 'prompt',
+        message: '',
+        inputValue: '',
+        isDestructive: false,
+        resolve: null as null | ((val: boolean | string | null) => void),
+      },
     };
   },
   computed: {
@@ -146,6 +153,14 @@ export default defineComponent({
       },
       immediate: true,
     },
+    'modal.type'(val: string | null) {
+      if (val === 'prompt') {
+        this.$nextTick(() => {
+          const input = this.$refs.modalInput as HTMLInputElement | undefined;
+          if (input) input.focus();
+        });
+      }
+    },
   },
   mounted() {
     window.addEventListener('keydown', this.handleKeydown);
@@ -163,8 +178,8 @@ export default defineComponent({
         },
       };
     },
-    addAccount() {
-      const name = prompt('Nome da conta/cartão (ex: Itaú, Fatura...):');
+    async addAccount() {
+      const name = await this.showPrompt('Nome da conta/cartão (ex: Itaú, Fatura...):');
       if (name) {
         const newId = Date.now().toString();
         this.accountDefs = [
@@ -208,8 +223,8 @@ export default defineComponent({
         this.updateAccountBalance(accountId, parsed);
       }
     },
-    removeAccount(id: string) {
-      if (confirm('Remover esta conta de todos os meses?')) {
+    async removeAccount(id: string) {
+      if (await this.showConfirm('Remover esta conta de todos os meses?', true)) {
         this.accountDefs = this.accountDefs.filter((acc) => acc.id !== id);
       }
     },
@@ -263,9 +278,9 @@ export default defineComponent({
     togglePinCurrent() {
       this.pinCurrent = !this.pinCurrent;
     },
-    applyFixedTemplates() {
+    async applyFixedTemplates() {
       if (this.fixedTemplates.length === 0) {
-        alert('Nenhum lançamento fixo cadastrado.');
+        await this.showAlert('Nenhum lançamento fixo cadastrado.');
         return;
       }
       const appliedIds = new Set(
@@ -275,10 +290,10 @@ export default defineComponent({
       );
       const toApply = this.fixedTemplates.filter((t) => !appliedIds.has(t.id));
       if (toApply.length === 0) {
-        alert('Todos os lançamentos fixos já estão aplicados neste mês.');
+        await this.showAlert('Todos os lançamentos fixos já estão aplicados neste mês.');
         return;
       }
-      if (!confirm(`Aplicar ${toApply.length} lançamento(s) fixo(s) a este mês?`)) {
+      if (!await this.showConfirm(`Aplicar ${toApply.length} lançamento(s) fixo(s) a este mês?`)) {
         return;
       }
       const baseTime = Date.now();
@@ -292,8 +307,8 @@ export default defineComponent({
       }));
       this.updatePage({ entries: [...newEntries, ...this.entries] });
     },
-    removeFixedTemplate(id: string) {
-      if (!confirm('Remover este modelo de lançamento fixo?')) return;
+    async removeFixedTemplate(id: string) {
+      if (!await this.showConfirm('Remover este modelo de lançamento fixo?', true)) return;
       this.fixedTemplates = this.fixedTemplates.filter((t) => t.id !== id);
     },
     unfixEntry(id: string) {
@@ -320,8 +335,8 @@ export default defineComponent({
     prevMonth() {
       this.currentDate = subMonths(this.currentDate, 1);
     },
-    resetMonth() {
-      if (confirm('Limpar registros deste mês?')) {
+    async resetMonth() {
+      if (await this.showConfirm('Limpar registros deste mês?', true)) {
         this.updatePage({ entries: [] });
       }
     },
@@ -334,9 +349,48 @@ export default defineComponent({
     toggleDrawer() {
       this.isDrawerOpen = !this.isDrawerOpen;
     },
+    showAlert(message: string): Promise<void> {
+      return new Promise((resolve) => {
+        this.modal.type = 'alert';
+        this.modal.message = message;
+        this.modal.isDestructive = false;
+        this.modal.inputValue = '';
+        this.modal.resolve = (resolve as unknown) as (val: boolean | string | null) => void;
+      });
+    },
+    showConfirm(message: string, isDestructive = false): Promise<boolean> {
+      return new Promise((resolve) => {
+        this.modal.type = 'confirm';
+        this.modal.message = message;
+        this.modal.isDestructive = isDestructive;
+        this.modal.inputValue = '';
+        this.modal.resolve = (resolve as unknown) as (val: boolean | string | null) => void;
+      });
+    },
+    showPrompt(message: string): Promise<string | null> {
+      return new Promise((resolve) => {
+        this.modal.type = 'prompt';
+        this.modal.message = message;
+        this.modal.isDestructive = false;
+        this.modal.inputValue = '';
+        this.modal.resolve = resolve as (val: boolean | string | null) => void;
+      });
+    },
+    closeModal(result: boolean | string | null) {
+      if (this.modal.resolve) {
+        this.modal.resolve(result);
+      }
+      this.modal.type = null;
+      this.modal.resolve = null;
+      this.modal.inputValue = '';
+    },
     handleKeydown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && this.isDrawerOpen) {
-        this.closeDrawer();
+      if (e.key === 'Escape') {
+        if (this.modal.type) {
+          this.closeModal(this.modal.type === 'confirm' ? false : null);
+        } else if (this.isDrawerOpen) {
+          this.closeDrawer();
+        }
       }
     },
     formatCurrency(val: number): string {
@@ -733,6 +787,82 @@ export default defineComponent({
           </section>
         </div>
       </aside>
+    </Transition>
+    <!-- App Modal (replaces alert / confirm / prompt) -->
+    <Transition name="modal-fade">
+      <div
+        v-if="modal.type"
+        class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[90] flex items-center justify-center px-4"
+        @click.self="closeModal(modal.type === 'confirm' ? false : null)"
+        role="dialog"
+        aria-modal="true"
+      >
+        <Transition name="modal-scale" appear>
+          <div
+            v-if="modal.type"
+            class="bg-paper w-full max-w-sm rounded-2xl shadow-2xl border border-black/5 overflow-hidden"
+            @click.stop
+          >
+            <!-- Modal Body -->
+            <div class="px-6 pt-6 pb-5">
+              <p class="text-sm text-ink leading-relaxed">{{ modal.message }}</p>
+
+              <!-- Prompt input -->
+              <div v-if="modal.type === 'prompt'" class="mt-4">
+                <input
+                  v-model="modal.inputValue"
+                  type="text"
+                  class="w-full bg-white border border-black/10 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ink/10 transition-all shadow-sm"
+                  placeholder="Digite aqui..."
+                  @keydown.enter="closeModal(modal.inputValue.trim() || null)"
+                  @keydown.esc.stop="closeModal(null)"
+                  ref="modalInput"
+                />
+              </div>
+            </div>
+
+            <!-- Modal Actions -->
+            <div class="px-4 pb-4 flex gap-2 justify-end">
+              <!-- Alert: only OK button -->
+              <template v-if="modal.type === 'alert'">
+                <button
+                  @click="closeModal(true)"
+                  class="px-5 py-2 rounded-lg bg-ink text-white text-sm font-medium hover:opacity-90 active:scale-95 transition-all"
+                >
+                  OK
+                </button>
+              </template>
+
+              <!-- Confirm / Prompt: cancel + confirm -->
+              <template v-else>
+                <button
+                  @click="closeModal(modal.type === 'confirm' ? false : null)"
+                  class="px-5 py-2 rounded-lg border border-black/10 text-sm font-medium text-gray-600 hover:bg-black/5 active:scale-95 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  v-if="modal.type === 'confirm'"
+                  @click="closeModal(true)"
+                  class="px-5 py-2 rounded-lg text-sm font-medium active:scale-95 transition-all"
+                  :class="modal.isDestructive
+                    ? 'border border-red-200 text-red-600 hover:bg-red-50'
+                    : 'bg-ink text-white hover:opacity-90'"
+                >
+                  Confirmar
+                </button>
+                <button
+                  v-if="modal.type === 'prompt'"
+                  @click="closeModal(modal.inputValue.trim() || null)"
+                  class="px-5 py-2 rounded-lg bg-ink text-white text-sm font-medium hover:opacity-90 active:scale-95 transition-all"
+                >
+                  Confirmar
+                </button>
+              </template>
+            </div>
+          </div>
+        </Transition>
+      </div>
     </Transition>
   </div>
 </template>
