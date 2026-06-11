@@ -46,7 +46,7 @@ servidor, sem nuvem.
 - Todos os valores formatados em **BRL (R$)** via `Intl.NumberFormat`.
 
 ### 💾 Persistência local
-- Hook `useLocalStorage` para dois namespaces:
+- Composable `useLocalStorage` para dois namespaces:
   - `fin_account_defs` → lista de contas cadastradas.
   - `fin_month_pages` → dicionário `{ "yyyy-MM": { entries, balances } }`.
 - Recuperação automática dos dados ao reabrir o app em outra sessão/dispositivo
@@ -58,20 +58,20 @@ servidor, sem nuvem.
 - Painel de resumo **fixo** na parte inferior (glassmorphism) com bolinhas
   coloridas indicando o status.
 - Dica flutuante pulsante: *"Toque no círculo para confirmar o pagamento"*.
-- Animações sutis com `motion/react`:
-  - Entrada/saída dos lançamentos (`AnimatePresence` + `layout`).
-  - Surgimento inicial do painel de resumo.
+- Animações sutis com `<TransitionGroup>` e `<Transition>` do próprio Vue:
+  - Entrada/saída dos lançamentos (`name="entry"` + `tag="div"`).
+  - Surgimento inicial do painel de resumo (`name="footer" appear`).
 - Suporte a `selection:bg-red-100` para uma seleção de texto coerente com o
   tema.
 
 ## 🛠️ Stack
 
-- **React 19** + **TypeScript** (`<script setup>`-style via hooks).
-- **Vite 6** (`@vitejs/plugin-react`).
-- **Tailwind CSS 4** via `@tailwindcss/vite` com tema customizado em CSS.
-- **lucide-react** para ícones.
+- **Vue 3** (Options API) + **TypeScript** com `<script setup lang="ts">` /
+  `defineComponent`.
+- **Vite 6** com `@vitejs/plugin-vue` e `@tailwindcss/vite`.
+- **Tailwind CSS 4** com tema customizado em CSS (`@theme`).
+- **lucide-vue-next** para ícones.
 - **date-fns** + locale `pt-BR` para manipulação de datas.
-- **motion** para animações declarativas.
 
 ## 🚀 Rodando localmente
 
@@ -106,9 +106,12 @@ servidor, sem nuvem.
 ├── tsconfig.json
 ├── vite.config.ts
 └── src/
-    ├── App.tsx        # Aplicação principal (UI + estado)
-    ├── index.css      # Tema Tailwind, fontes e estilo caderno
-    └── main.tsx       # Bootstrap React
+    ├── App.vue            # Componente raiz (UI + estado via Options API)
+    ├── index.css          # Tema Tailwind, fontes e estilo caderno
+    ├── env.d.ts           # Tipagens de ambiente
+    ├── main.ts            # Bootstrap Vue (createApp)
+    └── composables/
+        └── useLocalStorage.ts  # Helpers loadFromStorage/saveToStorage
 ```
 
 ## 📝 Licença
